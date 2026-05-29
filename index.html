@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Slowhand</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #161616;
+    color: #d0d0d0;
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .header {
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: #3a3a3a;
+    text-transform: uppercase;
+  }
+
+  .bpm-display {
+    font-size: 72px;
+    line-height: 1;
+    letter-spacing: -3px;
+    color: #e8e8e8;
+  }
+
+  .bpm-display span {
+    font-size: 14px;
+    letter-spacing: 0.1em;
+    color: #3a3a3a;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+
+  .presets { display: flex; gap: 6px; }
+
+  .preset {
+    flex: 1;
+    padding: 9px 0;
+    background: #1e1e1e;
+    border: 1px solid #282828;
+    border-radius: 3px;
+    color: #666;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.1s;
+    text-align: center;
+  }
+
+  .preset:hover { color: #aaa; border-color: #3a3a3a; }
+  .preset.active { background: #1c251c; border-color: #3d6b3d; color: #72b872; }
+
+  .nudge-row { display: flex; align-items: center; gap: 6px; }
+
+  .nudge {
+    width: 40px; height: 40px;
+    background: #1e1e1e;
+    border: 1px solid #282828;
+    border-radius: 3px;
+    color: #888;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.1s;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .nudge:hover { background: #252525; color: #ccc; }
+  .nudge:active { background: #2a2a2a; }
+
+  .steps { display: flex; gap: 4px; flex: 1; justify-content: center; }
+
+  .step {
+    padding: 5px 10px;
+    background: #1e1e1e;
+    border: 1px solid #282828;
+    border-radius: 3px;
+    color: #555;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+
+  .step:hover { color: #999; }
+  .step.active { background: #1a1e2a; border-color: #3a4a7a; color: #7a9ae8; }
+
+  .play-btn {
+    width: 100%;
+    padding: 14px;
+    background: #1c251c;
+    border: 1px solid #3d6b3d;
+    border-radius: 3px;
+    color: #72b872;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+
+  .play-btn:hover { background: #223022; }
+  .play-btn.playing { background: #251c1c; border-color: #7a3d3d; color: #e87272; }
+  .play-btn.loading { opacity: 0.5; cursor: wait; }
+
+  .code-wrap {
+    position: relative;
+  }
+
+  .code-editor {
+    width: 100%;
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 3px;
+    padding: 12px 14px;
+    padding-right: 52px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    line-height: 2;
+    color: #7a9ae8;
+    resize: vertical;
+    min-height: 84px;
+    outline: none;
+    transition: border-color 0.1s;
+  }
+
+  .code-editor:focus { border-color: #333; }
+
+  .copy {
+    position: absolute;
+    top: 8px; right: 8px;
+    background: none;
+    border: 1px solid #2a2a2a;
+    border-radius: 3px;
+    color: #3a3a3a;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    padding: 3px 7px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+
+  .copy:hover { color: #777; border-color: #444; }
+  .copy.ok { color: #72b872; border-color: #3d6b3d; }
+</style>
+</head>
+<body>
+
+<script src="https://unpkg.com/@strudel/web@latest"></script>
+
+<div class="app">
+  <div class="header">slowhand</div>
+  <div class="bpm-display" id="bpmDisplay">40 <span>BPM</span></div>
+  <div class="presets" id="presets"></div>
+  <div class="nudge-row">
+    <button class="nudge" id="btnDown">−</button>
+    <div class="steps" id="steps"></div>
+    <button class="nudge" id="btnUp">+</button>
+  </div>
+  <button class="play-btn" id="playBtn">▶ PLAY</button>
+  <div class="code-wrap">
+    <button class="copy" id="copyBtn">COPY</button>
+    <textarea class="code-editor" id="codeEditor" spellcheck="false"></textarea>
+  </div>
+</div>
+
+<script>
+  const PRESETS     = [10, 20, 30, 40, 50, 60, 70, 80];
+  const STEPS       = [1, 2, 5, 10];
+  const MIN         = 10, MAX = 80;
+  const DEFAULT_BPM = 20;
+
+  let bpm     = DEFAULT_BPM;
+  let step    = 5;
+  let playing = false;
+  let ready   = false;
+
+  function getCode(b) {
+    return `setcps(${(b / 60).toFixed(4)}) // ${b} BPM\n$: s("bd ~ ~ ~ sd ~ ~ ~")\n$: s("hh*4").gain(0.25)`;
+  }
+
+  // Build presets
+  const presetsEl = document.getElementById('presets');
+  PRESETS.forEach(p => {
+    const b = document.createElement('button');
+    b.className = 'preset';
+    b.textContent = p;
+    b.onclick = () => setBpm(p);
+    presetsEl.appendChild(b);
+  });
+
+  // Build step options
+  const stepsEl = document.getElementById('steps');
+  STEPS.forEach(sv => {
+    const b = document.createElement('button');
+    b.className = 'step' + (sv === step ? ' active' : '');
+    b.textContent = '±' + sv;
+    b.onclick = () => {
+      step = sv;
+      document.querySelectorAll('.step').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+    };
+    stepsEl.appendChild(b);
+  });
+
+  document.getElementById('btnDown').onclick = () => setBpm(bpm - step);
+  document.getElementById('btnUp').onclick   = () => setBpm(bpm + step);
+
+  const playBtn    = document.getElementById('playBtn');
+  const codeEditor = document.getElementById('codeEditor');
+
+  playBtn.onclick = async () => {
+    if (!ready) {
+      playBtn.textContent = '... LOADING';
+      playBtn.classList.add('loading');
+      await initStrudel();
+      await samples('github:tidalcycles/Dirt-Samples/master/');
+      ready = true;
+      playBtn.classList.remove('loading');
+    }
+
+    if (!playing) {
+      evaluate(codeEditor.value);
+      playing = true;
+      playBtn.textContent = '■ STOP';
+      playBtn.classList.add('playing');
+    } else {
+      evaluate("hush()");
+      playing = false;
+      playBtn.textContent = '▶ PLAY';
+      playBtn.classList.remove('playing');
+    }
+  };
+
+  function setBpm(val) {
+    bpm = Math.max(MIN, Math.min(MAX, val));
+    document.getElementById('bpmDisplay').innerHTML = `${bpm} <span>BPM</span>`;
+    codeEditor.value = getCode(bpm);
+    document.querySelectorAll('.preset').forEach(b => {
+      b.classList.toggle('active', parseInt(b.textContent) === bpm);
+    });
+    if (playing) evaluate(codeEditor.value);
+  }
+
+  document.getElementById('copyBtn').onclick = () => {
+    navigator.clipboard.writeText(codeEditor.value).then(() => {
+      const b = document.getElementById('copyBtn');
+      b.textContent = 'OK';
+      b.classList.add('ok');
+      setTimeout(() => { b.textContent = 'COPY'; b.classList.remove('ok'); }, 1400);
+    });
+  };
+
+  setBpm(DEFAULT_BPM);
+
+  document.addEventListener('keydown', e => {
+    if (e.target === codeEditor) return;
+    if (e.code === 'Space' || e.code === 'Enter') {
+      e.preventDefault();
+      playBtn.click();
+    }
+    const idx = parseInt(e.key) - 1;
+    if (idx >= 0 && idx < PRESETS.length) setBpm(PRESETS[idx]);
+  });
+</script>
+</body>
+</html>
