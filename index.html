@@ -285,6 +285,8 @@
     });
   };
 
+  if (window.matchMedia('(pointer: coarse)').matches) codeEditor.setAttribute('readonly', '');
+
   setBpm(DEFAULT_BPM);
 
   document.addEventListener('keydown', e => {
