@@ -1,0 +1,8 @@
+{
+  "name": "Slowhand",
+  "short_name": "Slowhand",
+  "display": "standalone",
+  "background_color": "#161616",
+  "theme_color": "#161616",
+  "start_url": "/"
+}
