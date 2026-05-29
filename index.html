@@ -134,7 +134,7 @@
     border: 1px solid #222;
     border-radius: 3px;
     padding: 12px 14px;
-    padding-right: 52px;
+    padding-right: 100px;
     font-family: 'Share Tech Mono', monospace;
     font-size: 11px;
     line-height: 2;
@@ -181,7 +181,8 @@
   </div>
   <button class="play-btn" id="playBtn">▶ PLAY</button>
   <div class="code-wrap">
-    <button class="copy" id="copyBtn">COPY</button>
+    <button class="copy" id="openBtn">OPEN</button>
+    <button class="copy" id="copyBtn" style="right: 52px;">COPY</button>
     <textarea class="code-editor" id="codeEditor" spellcheck="false"></textarea>
   </div>
 </div>
@@ -263,6 +264,11 @@
     });
     if (playing) evaluate(codeEditor.value);
   }
+
+  document.getElementById('openBtn').onclick = () => {
+    const encoded = btoa(unescape(encodeURIComponent(codeEditor.value)));
+    window.open('https://strudel.cc/#' + encoded, '_blank');
+  };
 
   document.getElementById('copyBtn').onclick = () => {
     navigator.clipboard.writeText(codeEditor.value).then(() => {
