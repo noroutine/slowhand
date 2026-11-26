@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#161616">
+<title>ECDH — Melodic Key Exchange</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #161616; color: #d0d0d0;
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh; display: flex; justify-content: center;
+    padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  }
+  html { scrollbar-gutter: stable; }
+  .app { width: 100%; max-width: 720px; display: flex; flex-direction: column; gap: 14px; }
+  .header { font-size: 10px; letter-spacing: .25em; color: #3a3a3a; text-transform: uppercase; display:flex; justify-content:space-between; }
+  .header b { color:#555; font-weight:normal; }
+  .secret-display { font-size: 40px; line-height: 1.1; letter-spacing: -1px; color: #e8e8e8; word-break: break-all; min-height: 96px; }
+  .secret-display .lbl { display:block; font-size: 11px; letter-spacing: .15em; color: #3a3a3a; margin-top: 4px; }
+  .secret-display.matched { color: #72b872; text-shadow: 0 0 24px rgba(114,184,114,.25); }
+  .sub { font-size: 11px; color:#555; line-height:1.7; min-height: 56px; }
+  .sub .a{color:#7a9ae8}.sub .b{color:#72b872}.sub .s{color:#e8c872}
+
+  .public-bar {
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    background:#1e1e1e; border:1px solid #282828; border-radius:3px; padding:9px 12px;
+    font-size:12px; color:#888;
+  }
+  .public-bar strong { color:#e8e8e8; font-weight:normal; }
+  .p-presets { margin-left:auto; display:flex; gap:4px; }
+  .p-btn { padding:4px 9px; background:#161616; border:1px solid #282828; border-radius:3px; color:#666;
+    font-family:inherit; font-size:11px; cursor:pointer; }
+  .p-btn:hover{color:#aaa}.p-btn.active{background:#1a1e2a;border-color:#3a4a7a;color:#7a9ae8}
+
+  .parties { display:grid; grid-template-columns:1fr auto 1fr; gap:8px; align-items:stretch; }
+  .card { background:#1e1e1e; border:1px solid #282828; border-radius:3px; padding:12px; transition:border-color .2s; min-width:0; }
+  .card h2 { font-size:12px; letter-spacing:.2em; font-weight:normal; margin-bottom:8px; }
+  .card.alice h2{color:#7a9ae8}.card.bob h2{color:#72b872}
+  .card.alice.live{border-color:#3a4a7a}
+  .card.bob.live{border-color:#3d6b3d}
+  .row { font-size:11px; padding:4px 0; color:#666; }
+  .row .k { display:block; font-size:9px; letter-spacing:.12em; color:#444; margin-bottom:2px; }
+  .row .v { color:#d0d0d0; word-break:break-all; line-height:1.5; }
+  .row .priv { color:#e87272; }
+  .row .dim { color:#444; }
+  .channel { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; width:84px; min-width:84px; color:#3a3a3a; font-size:9px; letter-spacing:.15em; text-align:center;}
+  #wireLabel { display:block; height:26px; overflow:hidden; }
+  .wire { position:relative; width:100%; height:1px; background:#2c2c2c; }
+  .packet { position:absolute; top:-3px; left:0; width:7px; height:7px; border-radius:50%; background:#e8c872; opacity:0; box-shadow:0 0 10px #e8c872; }
+  .eve { background:#1a1515; border:1px dashed #3a2a2a; border-radius:3px; padding:8px 12px; font-size:11px; color:#775555; line-height:1.7; min-height:58px; }
+  .eve b{color:#c08080;font-weight:normal}
+
+  .melody { background:#111; border:1px solid #222; border-radius:3px; padding:12px; }
+  .melody-label { font-size:9px; letter-spacing:.18em; color:#3a3a3a; margin-bottom:8px; display:flex; justify-content:space-between; gap:12px; flex-wrap:nowrap; height:18px; overflow:hidden; }
+  .melody-label > span:first-child { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex-shrink:1; }
+  .melody-label #nowNote { color:#e8c872; letter-spacing:.05em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-align:right; min-width:0; }
+  .notes { display:flex; gap:2px; align-items:flex-end; height:74px; overflow:hidden; }
+  .frame{flex:1;min-width:3px;display:flex;flex-direction:column;justify-content:flex-end;gap:2px;height:100%}
+  .frame .note{flex:none;width:100%}
+  .packet.b{background:#72b872;box-shadow:0 0 10px #72b872}
+  .note { flex:1; min-width:3px; border-radius:2px 2px 0 0; background:#2a2a2a; cursor:pointer; }
+  .note.sendA{background:#2f4a7a}.note.sendB{background:#2f5f2f}
+  .note.sync{background:#7a6428;box-shadow:inset 0 0 0 1px #a8893a}
+  .note.kick{background:#9a4632;cursor:default}
+  .note.clap{background:#cfcfcf;cursor:default}
+  .note.clap2{background:#8f8f8f;cursor:default;box-shadow:inset 0 0 0 1px #cfcfcf}
+  .note.rest{background:#151515;border:1px dashed #2c2c2c;flex:0 0 12px;cursor:default}
+  .note.on { filter:brightness(2.4); }
+
+  .steps-list { display:flex; flex-direction:column; gap:4px; }
+  .step-row { display:flex; gap:10px; padding:7px 10px; background:#1e1e1e; border:1px solid #222; border-radius:3px; font-size:11px; color:#555; transition:color .15s, border-color .15s; }
+  .step-row .n{color:#333}.step-row.live{color:#ccc;border-color:#3a3a3a}.step-row.done{color:#777}
+  .step-row.live .n{color:#e8c872}
+
+  .presets { display:flex; gap:6px; }
+  .preset { flex:1; padding:9px 0; background:#1e1e1e; border:1px solid #282828; border-radius:3px; color:#666;
+    font-family:inherit; font-size:12px; cursor:pointer; text-align:center; }
+  .preset:hover{color:#aaa;border-color:#3a3a3a}.preset.active{background:#1c251c;border-color:#3d6b3d;color:#72b872}
+  .btn { width:100%; padding:14px; border-radius:3px; font-family:inherit; font-size:13px; letter-spacing:.2em; cursor:pointer; text-transform:uppercase; transition:all .15s; }
+  .play-btn { background:#1c251c; border:1px solid #3d6b3d; color:#72b872; }
+  .play-btn:hover{background:#223022}.play-btn.playing{background:#251c1c;border-color:#7a3d3d;color:#e87272}
+  .play-btn.loading{opacity:.5;cursor:wait}
+  .play-btn:disabled{opacity:.4;cursor:wait}
+  .new-btn { background:#1e1e1e; border:1px solid #282828; color:#888; }
+  .new-btn:hover{color:#ccc;border-color:#3a3a3a}
+  .btn-row{display:flex;gap:6px}.btn-row .btn{flex:1}.btn-row .new-btn{flex:0 0 42%}
+
+  .code-wrap { position:relative; }
+  .code-editor { width:100%; background:#111; border:1px solid #222; border-radius:3px; padding:12px 14px; padding-right:100px;
+    font-family:inherit; font-size:11px; line-height:1.9; color:#7a9ae8; resize:vertical; min-height:170px; outline:none; scrollbar-width:none; }
+  .code-editor::-webkit-scrollbar{display:none}.code-editor:focus{border-color:#333}
+  .copy { position:absolute; top:8px; right:8px; background:none; border:1px solid #2a2a2a; border-radius:3px; color:#3a3a3a;
+    font-family:inherit; font-size:9px; letter-spacing:.15em; padding:3px 7px; cursor:pointer; }
+  .copy:hover{color:#777;border-color:#444}.copy.ok{color:#72b872;border-color:#3d6b3d}
+  .hint{font-size:10px;color:#333;line-height:1.8}
+  .session-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#161a16;border:1px dashed #2c3a2c;border-radius:3px;padding:8px 12px;font-size:11px;color:#667766;min-height:38px}
+  .session-bar strong{color:#9ab89a;font-weight:normal}
+  .session-bar #horizonVal{color:#778877}
+  .toggle-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:32px}
+  .toggle-label{font-size:9px;letter-spacing:.2em;color:#3a3a3a}
+  .toggle-btn{padding:6px 18px;background:#1e1e1e;border:1px solid #282828;border-radius:3px;color:#666;font-family:inherit;font-size:12px;cursor:pointer;min-width:74px}
+  .toggle-btn:hover{color:#aaa;border-color:#3a3a3a}
+  .toggle-btn.active{background:#1c251c;border-color:#3d6b3d;color:#72b872}
+  .toggle-note{font-size:10px;color:#444}
+  @media (max-width:560px){ .parties{grid-template-columns:1fr 44px 1fr} .channel{width:44px;min-width:44px} .secret-display{font-size:30px;min-height:76px} .sub{min-height:76px} }
+</style>
+</head>
+<body>
+<script src="https://unpkg.com/@strudel/web@latest"></script>
+
+<div class="app">
+  <div class="header"><span>ecdh — elliptic curve diffie–hellman</span><b>melodic · strudel</b></div>
+
+  <div>
+    <div class="secret-display" id="secretDisplay">…<span class="lbl">SHARED SECRET — DERIVED LOCALLY, NEVER TRANSMITTED, NEVER PLAYED</span></div>
+    <div class="sub" id="statusLine">Generating real keys…</div>
+  </div>
+
+  <div class="public-bar">
+    <span>CURVE&nbsp; <strong id="curveVal">P-256</strong>&nbsp; <span style="color:#444" id="sizesVal"></span></span>
+    <div class="p-presets" id="curvePresets"></div>
+  </div>
+
+  <div class="session-bar">
+    <span>SIZED FOR <strong>24H</strong> — not decades</span>
+    <span id="horizonVal">· breaking this needs ~2⁸⁰ EC operations; at 10¹⁵ ops/s that is ~38 years. For one day, plenty.</span>
+  </div>
+
+  <div class="parties">
+    <div class="card alice" id="aliceCard">
+      <h2>ALICE</h2>
+      <div class="row"><span class="k">PRIVATE KEY — NEVER SENT</span><span class="v priv" id="aPriv">–</span></div>
+      <div class="row"><span class="k">TRANSMITS → PUBLIC KEY (COMPRESSED POINT)</span><span class="v" id="aPub">–</span></div>
+      <div class="row"><span class="k">RECEIVED FROM BOB</span><span class="v" id="aRecv">–</span></div>
+      <div class="row"><span class="k">DERIVED SHARED SECRET</span><span class="v" id="aShared">?</span></div>
+    </div>
+    <div class="channel">
+      <span>NETWORK</span>
+      <div class="wire"><div class="packet" id="packet"></div><div class="packet b" id="packet2"></div></div>
+      <span id="wireLabel">idle</span>
+    </div>
+    <div class="card bob" id="bobCard">
+      <h2>BOB</h2>
+      <div class="row"><span class="k">PRIVATE KEY — NEVER SENT</span><span class="v priv" id="bPriv">–</span></div>
+      <div class="row"><span class="k">TRANSMITS → PUBLIC KEY (COMPRESSED POINT)</span><span class="v" id="bPub">–</span></div>
+      <div class="row"><span class="k">RECEIVED FROM ALICE</span><span class="v" id="bRecv">–</span></div>
+      <div class="row"><span class="k">DERIVED SHARED SECRET</span><span class="v" id="bShared">?</span></div>
+    </div>
+  </div>
+
+  <div class="eve"><b>EVE, ON THE NETWORK:</b> hears both public keys below — every note that plays. Public keys are safe to hear: without either private key she cannot derive the shared secret. <span id="eveLine"></span></div>
+
+  <div class="melody">
+    <div class="melody-label"><span>ON THE WIRE — 1 BYTE = 1 DYAD (2 NOTES AT ONCE: LOW NIBBLE + HIGH NIBBLE) PER SIDE · CLICK A BAR TO HEAR THAT BYTE</span><span id="nowNote"></span></div>
+    <div class="notes" id="notes"></div>
+  </div>
+
+  <div class="steps-list" id="stepsList"></div>
+
+  <div class="toggle-row">
+    <span class="toggle-label">2-2-4 REPEATS</span>
+    <button class="toggle-btn active" id="repToggle">ON</button>
+    <span class="toggle-note" id="repNote"></span>
+    <span class="toggle-label" style="margin-left:10px">EXCHANGE</span>
+    <button class="toggle-btn active" id="modeToggle">TOGETHER</button>
+    <span class="toggle-label" style="margin-left:10px">KICK</span>
+    <button class="toggle-btn" id="kickToggle">OFF</button>
+    <span class="toggle-label">CLAP</span>
+    <button class="toggle-btn" id="clapToggle">OFF</button>
+  </div>
+
+  <div>
+    <div style="font-size:9px;letter-spacing:.2em;color:#3a3a3a;margin-bottom:6px">TEMPO — BPM (ONE STEP PER BEAT)</div>
+    <div class="presets" id="presets"></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn play-btn" id="playBtn" disabled>… GENERATING KEYS</button>
+    <button class="btn new-btn" id="newBtn">↻ NEW KEYS</button>
+  </div>
+
+  <div class="code-wrap">
+    <button class="copy" id="openBtn">OPEN</button>
+    <button class="copy" id="copyBtn" style="right:52px">COPY</button>
+    <textarea class="code-editor" id="codeEditor" spellcheck="false"></textarea>
+  </div>
+  <div class="hint">SPACE play/stop · N new keys · Curves are the standard SEC2 secp128r1 / secp160r1, computed in-page with BigInt because WebCrypto offers nothing below P-256. These small curves exist here because the channel only has to hold for ~24h — do not protect anything long-term with them. Sound is Strudel synth, no samples. Nothing computed is played: only the two public keys that cross the network, with a 4-step pause between them.</div>
+</div>
+
+<script>
+  // ---------- ECDH on small SEC2 curves, sized for a 24h horizon ----------
+  // WebCrypto offers nothing below P-256 (128-bit security = decades), so these
+  // standard curves are computed in-page with BigInt. Security of an EC key is
+  // ~half its bits (Pollard rho): 128-bit curve -> ~64-bit, 160-bit -> ~80-bit.
+  const BI = s => BigInt('0x' + s);
+  const CURVES = {
+    'secp128r1': { coord: 16, bits: 128, security: 64, p: BI('FFFFFFFDFFFFFFFFFFFFFFFFFFFFFFFF'), a: BI('FFFFFFFDFFFFFFFFFFFFFFFFFFFFFFFC'), b: BI('E87579C11079F43DD824993C2CEE5ED3'), gx: BI('161FF7528B899B2D0C28607CA52C5B86'), gy: BI('CF5AC8395BAFEB13C02DA292DDED7A83'), n: BI('FFFFFFFE0000000075A30D1B9038A115') },
+    'secp160r1': { coord: 20, bits: 160, security: 80, p: BI('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FFFFFFF'), a: BI('FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7FFFFFFC'), b: BI('1C97BEFC54BD7A8B65ACF89F81D4D4ADC565FA45'), gx: BI('4A96B5688EF573284664698968C38BB913CBFC82'), gy: BI('23A628553168947D59DCC912042351377AC5FB32'), n: BI('0100000000000000000001F4C8F927AED3CA752257') },
+  };
+  let curve = 'secp160r1', bpm = 240;
+  let alicePub = null, bobPub = null;         // compressed-point bytes — the transmitted payloads
+  let aPrivBytes = null, bPrivBytes = null;   // kept only so the 2-2-4 toggle can re-render
+  let sharedHex = '', frames = [];            // frames: {a, b, rest?, label?} — a/b are transmitted notes or null
+  let keysReady = false, repeatsOn = true, exchangeTogether = true, kickOn = false, clapOn = false;
+  let syncStartA = 0, syncStartB = 0, syncBlocks = 0;   // sync preamble metadata (blocks of 4 steps)
+
+  const hex = bytes => [...bytes].map(x => x.toString(16).padStart(2, '0')).join('');
+  const shortHex = bytes => { const h = hex(bytes); return h.slice(0, 16) + '…' + h.slice(-8); };
+  const mod = (a, p) => ((a % p) + p) % p;
+  function powMod(a, e, p) { let r = 1n; a = mod(a, p); while (e) { if (e & 1n) r = r * a % p; a = a * a % p; e >>= 1n; } return r; }
+  const inv = (a, C) => powMod(a, C.p - 2n, C.p);
+  function pointAdd(P, Q, C) {
+    if (!P) return Q; if (!Q) return P;
+    if (P.x === Q.x && mod(P.y + Q.y, C.p) === 0n) return null;
+    const l = P.x === Q.x && P.y === Q.y
+      ? mod((3n * P.x * P.x + C.a) * inv(2n * P.y, C), C.p)
+      : mod((Q.y - P.y) * inv(Q.x - P.x, C), C.p);
+    const x = mod(l * l - P.x - Q.x, C.p);
+    return { x, y: mod(l * (P.x - x) - P.y, C.p) };
+  }
+  function pointMul(k, P, C) { let R = null, Q = P; while (k) { if (k & 1n) R = pointAdd(R, Q, C); Q = pointAdd(Q, Q, C); k >>= 1n; } return R; }
+  const intToBytes = (v, len) => { const out = new Uint8Array(len); for (let i = len - 1; i >= 0; i--) { out[i] = Number(v & 255n); v >>= 8n; } return out; };
+  const bytesToInt = bytes => bytes.reduce((v, x) => (v << 8n) | BigInt(x), 0n);
+  function randomScalar(C) {
+    const buf = new Uint8Array(C.coord + 8); crypto.getRandomValues(buf);
+    return bytesToInt(buf) % (C.n - 1n) + 1n;
+  }
+  const compress = (P, C) => { const out = new Uint8Array(C.coord + 1); out[0] = P.y % 2n === 0n ? 0x02 : 0x03; out.set(intToBytes(P.x, C.coord), 1); return out; };
+  function decompress(bytes, C) {           // both curves have p % 4 == 3, so sqrt is one power
+    const x = bytesToInt(bytes.slice(1));
+    const y2 = mod(x ** 3n + C.a * x + C.b, C.p);
+    let y = powMod(y2, (C.p + 1n) / 4n, C.p);
+    if (mod(y * y, C.p) !== y2) throw new Error('received point is not on the curve');
+    if (Number(y % 2n) !== (bytes[0] & 1)) y = C.p - y;
+    return { x, y };
+  }
+
+  async function genKeys() {
+    keysReady = false; playBtn.disabled = true; playBtn.textContent = '… GENERATING KEYS';
+    if (playing) stop();
+    const C = CURVES[curve], G = { x: C.gx, y: C.gy };
+    const aScalar = randomScalar(C), bScalar = randomScalar(C);
+    alicePub = compress(pointMul(aScalar, G, C), C);
+    bobPub = compress(pointMul(bScalar, G, C), C);
+    aPrivBytes = intToBytes(aScalar, C.coord); bPrivBytes = intToBytes(bScalar, C.coord);
+    // each side derives from its own scalar + the compressed key it RECEIVED (decompressed on arrival)
+    const sA = pointMul(aScalar, decompress(bobPub, C), C);
+    const sB = pointMul(bScalar, decompress(alicePub, C), C);
+    if (sA.x !== sB.x) throw new Error('shared secrets differ — impossible for honest ECDH');
+    sharedHex = hex(intToBytes(sA.x, C.coord));
+    buildMelody();
+    render(aPrivBytes, bPrivBytes);
+    keysReady = true; playBtn.disabled = false; playBtn.textContent = '▶ PLAY TRANSMISSION';
+  }
+
+  // ---------- transmitted bytes -> melody (computation is not in here at all) ----------
+  const REPS = [2, 2, 4];               // A B C -> AABBCCCC, then the cycle repeats (per sender)
+  const SCALE = ['c', 'd', 'e', 'g', 'a'];
+  const NOTE_NAMES = [];
+  for (let oct = 3; oct <= 6; oct++) SCALE.forEach(n => NOTE_NAMES.push(n + oct));
+  const idxForByte = byte => Math.min(14, Math.floor(byte / 256 * 15));
+  // one pentatonic octave = 5 scale degrees: same byte, Alice sounds a full octave above Bob
+  const noteForByte = (byte, octaveUp) => NOTE_NAMES[idxForByte(byte) + (octaveUp ? SCALE.length : 0)];
+
+  const sungNotes = n => { if (!repeatsOn) return n; let t = 0; for (let i = 0; i < n; i++) t += REPS[i % REPS.length]; return t; };
+
+  function buildMelody() {
+    // Lossless byte encoding: ONE note cannot name 256 bytes (2 octaves = only 25 chromatic
+  // pitches). So each byte is a DYAD — low note = low nibble (16 chromatic pitches in the
+  // party's low register), high note = high nibble (16 pitches a register above).
+  const FLATS = ['c', 'db', 'd', 'eb', 'e', 'f', 'gb', 'g', 'ab', 'a', 'bb', 'b'];
+  const midiName = m => FLATS[m % 12] + (Math.floor(m / 12) - 1);
+  const DYAD_BASE = { A: 72, B: 36 };          // Bob C2 band, Alice C5 band — far apart, mic-separable
+  const sung = (bytes, side, who, octaveUp) => {
+      const out = [];
+      bytes.forEach((byte, i) => {             // one byte (8 bits) per DYAD: 2 simultaneous notes
+        const lo = DYAD_BASE[side] + (byte & 15), hi = DYAD_BASE[side] + 16 + (byte >> 4);
+        const chord = `[${midiName(lo)},${midiName(hi)}]`;
+        const reps = repeatsOn ? REPS[i % REPS.length] : 1;
+        for (let r = 0; r < reps; r++)
+          out.push({ byte, note: `${midiName(lo)}+${midiName(hi)}`, chord, side, label: `${who} public key · byte ${i + 1}/${bytes.length} · 0x${byte.toString(16).padStart(2, '0')} = lo 0x${(byte & 15).toString(16)} + hi 0x${(byte >> 4).toString(16)} · ×${reps}` });
+      });
+      return out;
+    };
+    const A = sung(alicePub, 'A', 'Alice →', true), B = sung(bobPub, 'B', 'Bob →', false);
+    // --- sync preamble: FIXED starts (no randomness — it also made replays feel off).
+    // Alice starts block 1 and pulses 5 times; Bob starts block 3 and pulses 3 times.
+    // Once both are pulsing, count shared strikes; they catch on the 3rd shared strike.
+    syncStartA = 0;
+    syncStartB = 2;
+    const catchBlock = Math.max(syncStartA, syncStartB) + 2;
+    syncBlocks = catchBlock + 1;
+    const syncFrames = [];
+    for (let block = 0; block < syncBlocks; block++) {
+      for (let step = 0; step < 4; step++) {
+        const f = { a: null, b: null, sync: true, rest: step !== 0, label: 'sync — waiting for the next 4-step pulse' };
+        if (step === 0) {
+          if (block >= syncStartA) f.a = { byte: null, note: 'c5', side: 'A', sync: true, label: `Alice sync pulse ${block - syncStartA + 1} — searching for Bob` };
+          if (block >= syncStartB) f.b = { byte: null, note: 'c4', side: 'B', sync: true, label: `Bob sync pulse ${block - syncStartB + 1} — searching for Alice` };
+          if (f.a && f.b) {
+            const sharedNo = block - Math.max(syncStartA, syncStartB) + 1;
+            f.sharedNo = sharedNo; f.catch = block === catchBlock;
+            f.a.label = `Alice sync pulse — shared ${sharedNo}/3${f.catch ? ' · CAUGHT — locked, transmission starts' : ''}`;
+            f.b.label = `Bob sync pulse — shared ${sharedNo}/3${f.catch ? ' · CAUGHT — locked, transmission starts' : ''}`;
+          }
+          if (!f.a && !f.b) f.rest = true;
+        }
+        syncFrames.push(f);
+      }
+    }
+    const keyFrames = [];
+    if (exchangeTogether) {          // public keys are independent: nothing forces turns, they can cross
+      for (let i = 0; i < Math.max(A.length, B.length); i++) keyFrames.push({ a: A[i] || null, b: B[i] || null });
+    } else {
+      A.forEach(a => keyFrames.push({ a, b: null }));
+      for (let i = 0; i < 4; i++) keyFrames.push({ a: null, b: null, rest: true, label: 'pause — Alice\u2019s transmission ends, Bob\u2019s begins' });
+      B.forEach(b => keyFrames.push({ a: null, b }));
+    }
+    frames = [...syncFrames, ...keyFrames];
+    // the pulse does not stop at the catch: sync tones keep beating every 4 steps
+    // underneath the exchange. Kick waits until transmission (1/4 off, exchange only).
+    // Clap starts once BOTH sides are pulsing, at 2/4 off — in sync and exchange alike.
+    let eIdx = 0;
+    frames.forEach(f => { if (!f.sync) { if (eIdx % 4 === 0) f.syncPulse = true; if (eIdx % 4 === 1) f.kick = true; eIdx++; } });
+    const firstShared = frames.findIndex(f => f.sync && f.a && f.b);
+    frames.forEach((f, i) => { if (firstShared >= 0 && i >= firstShared && i % 4 === 2) f.clap = true; });
+    // every 4th clap gets a second clap, one step later (the 3/4 slot of its block)
+    let clapCount = 0;
+    frames.forEach((f, i) => { if (f.clap) { clapCount++; if (clapCount % 4 === 0 && frames[i + 1]) frames[i + 1].clap2 = true; } });
+    frames.forEach((f, i) => { if (f.a) f.a.frame = i; if (f.b) f.b.frame = i; });
+  }
+  const framePhase = f => f.sync ? 'sync' : f.rest ? 'pause' : f.a && f.b ? 'together' : f.a ? 'sendA' : 'sendB';
+
+  function strudelCode() {
+    const { coord } = CURVES[curve];
+    const head = [
+      `// ecdh ${curve} (sized for a 24h horizon: ~${CURVES[curve].security}-bit security) — only the wire is sung: one byte per DYAD [low-nibble note, high-nibble note], 16 chromatic pitches per nibble = lossless, ${repeatsOn ? 'each byte repeated 2-2-4' : 'each byte once (2-2-4 off)'}`,
+      `// alice transmits compressed public key (${coord + 1} bytes, one octave above bob): ${hex(alicePub)}`,
+      `// bob   transmits compressed public key (${coord + 1} bytes): ${hex(bobPub)}`,
+      `setcps(${(bpm / 60).toFixed(3)}) // ${bpm} BPM, one step per beat`,
+    ];
+    const pulseSeq = frames.map(f => f.syncPulse ? '[c5,c4]' : '~').join(' ');
+    const kickSeq = frames.map(f => f.kick ? 'c1' : '~').join(' ');
+    const beatVoices = [
+      `// beat: sync pulse [c5,c4] every 4 steps${kickOn ? '; kick (exchange only, optional) 1/4 off it' : ''}${clapOn ? '; clap (optional) 2/4 off once both sides pulse, every 4th doubled' : ''}`,
+      `$: note("${pulseSeq}").s("triangle").gain(0.20).decay(0.20).sustain(0).slow(${frames.length})`,
+    ];
+    if (kickOn) beatVoices.push(
+      `$: note("${kickSeq}").s("sine").gain(0.85).decay(0.28).sustain(0).slow(${frames.length}) // synth kick (optional, on)`,
+      `$: s("${frames.map(f => f.kick ? 'RolandTR909_bd' : '~').join(' ')}").gain(0.9).slow(${frames.length}) // sampled TR-909 kick (tidal-drum-machines)`,
+    );
+    if (clapOn) beatVoices.push(
+      `$: s("${frames.map(f => f.clap || f.clap2 ? 'RolandTR909_cp' : '~').join(' ')}").gain(0.8).slow(${frames.length}) // sampled TR-909 clap, 2/4 off; every 4th clap gets a 2nd, one step later`,
+    );
+    if (exchangeTogether) return [...head,
+      `// SYNC FIRST: pulse every 4 steps (alice c5 / bob c4) — FIXED starts: alice block 1 (5 pulses), bob block 3 (3 pulses), of ${syncBlocks} blocks; they catch on the 3rd shared pulse. Then:`,
+      `// BOTH AT ONCE: two $: voices stacked — the keys cross on the wire. DH never required turns.`,
+      `$: note("${frames.map(f => f.a ? (f.a.chord || f.a.note) : '~').join(' ')}") // alice dyads [lo,hi] per byte, C5 band`,
+      `     .s("triangle").gain(0.40).decay(0.22).sustain(0).slow(${frames.length})`,
+      `$: note("${frames.map(f => f.b ? (f.b.chord || f.b.note) : '~').join(' ')}") // bob dyads [lo,hi] per byte, C2 band — 4 notes at once with alice, bands far apart for a mic`,
+      `     .s("square").gain(0.20).decay(0.22).sustain(0).slow(${frames.length})`,
+      ...beatVoices,
+      `// private keys & shared secret are never transmitted, never played.`,
+    ].join('\n');
+    return [...head,
+      `// SYNC FIRST: pulse every 4 steps (alice c5 / bob c4) — FIXED starts: alice block 1 (5 pulses), bob block 3 (3 pulses), of ${syncBlocks} blocks; shared pulses are [chords], they catch on the 3rd.`,
+      `// then one after another, ~~~~ = the 4-step pause between turns. private keys & shared secret never transmitted, never played.`,
+      `$: note("${frames.map(f => f.rest ? '~' : f.sync && f.a && f.b ? `[${f.a.note},${f.b.note}]` : ((f.a || f.b).chord || (f.a || f.b).note)).join(' ')}")`,
+      `     .s("triangle").gain(0.42).decay(0.22).sustain(0)`,
+      `     .slow(${frames.length}) // 1 step per cycle`,
+      ...beatVoices,
+    ].join('\n');
+  }
+
+  // ---------- DOM ----------
+  const $ = id => document.getElementById(id);
+  const playBtn = $('playBtn'), codeEditor = $('codeEditor');
+  const syncStep = ['sync', `Sync pulses every 4 steps — FIXED: Alice starts block 1 and pulses 5×, Bob starts block 3 and pulses 3×; they catch on the 3rd pulse they share${clapOn ? ' · clap (optional) lands 2/4 after each pulse once both are pulsing, every 4th doubled' : ''}${kickOn ? ' · kick (optional) waits for transmission' : ''}`];
+  const PHASE_STEPS = () => exchangeTogether ? [
+    syncStep,
+    ['together', `♪♪ Both transmit AT ONCE — one byte from EACH side per step as a 2-note dyad: 4 notes at once, 2 bytes/step total (bands far apart for a mic) · ${alicePub.length} bytes each${kickOn ? ' · kick 1/4 off' : ''}${clapOn ? ' · clap 2/4 off' : ''}`],
+    ['derive', 'Each derives the shared secret from the key that arrived — nothing more is sent or played'],
+  ] : [
+    syncStep,
+    ['sendA', `♪ Alice transmits her public key — ${alicePub.length} bytes → ${sungNotes(alicePub.length)} notes${repeatsOn ? ' (2-2-4)' : ''}, one octave up`],
+    ['pause', 'Pause — 4 steps between the two transmissions'],
+    ['sendB', `♪ Bob transmits his public key — ${bobPub.length} bytes → ${sungNotes(bobPub.length)} notes${repeatsOn ? ' (2-2-4)' : ''}`],
+    ['derive', 'Both derive the same shared secret locally — nothing more is sent or played'],
+  ];
+
+  function render(aPriv, bPriv) {
+    const { coord } = CURVES[curve];
+    $('curveVal').textContent = curve;
+    $('sizesVal').textContent = `private ${CURVES[curve].bits}-bit (${aPriv.length} B) · public ${coord + 1} B compressed · ~${CURVES[curve].security}-bit security`;
+    $('horizonVal').textContent = CURVES[curve].security === 80
+      ? '· breaking this needs ~2⁸⁰ EC operations; at 10¹⁵ ops/s that is ~38 years. For one day, plenty.'
+      : '· breaking this needs ~2⁶⁴ EC operations; at 10¹² ops/s that is ~580 years. For one day, plenty — thinner margin if your attacker is a state.';
+    $('aPriv').textContent = `${shortHex(aPriv)}  ·  ${aPriv.length} B`;
+    $('bPriv').textContent = `${shortHex(bPriv)}  ·  ${bPriv.length} B`;
+    $('aPub').textContent = shortHex(alicePub) + `  ·  ${alicePub.length} B`;
+    $('bPub').textContent = shortHex(bobPub) + `  ·  ${bobPub.length} B`;
+    $('aRecv').innerHTML = '<span class="dim">–</span>'; $('bRecv').innerHTML = '<span class="dim">–</span>';
+    $('aShared').textContent = '?'; $('bShared').textContent = '?';
+    const d = $('secretDisplay');
+    d.innerHTML = '…<span class="lbl">SHARED SECRET — DERIVED LOCALLY, NEVER TRANSMITTED, NEVER PLAYED</span>';
+    d.classList.remove('matched');
+    $('eveLine').textContent = '';
+    $('statusLine').innerHTML = `Real <span class="s">${curve}</span> keys: Alice and Bob each hold a <span style="color:#e87272">${CURVES[curve].bits}-bit private key</span> that never leaves their card. The only thing that ever crosses the network — and the only thing you will hear — is each <span class="a">compressed public key (${coord + 1} bytes)</span> — played <span class="s">one byte per dyad</span> per side: two simultaneous notes, low note = low nibble, high note = high nibble (16 chromatic pitches each, so the byte is recoverable from the pitches — one note alone could never name 256 values)${repeatsOn ? ' with <span class="s">2-2-4 repeats</span>' : ''}, Alice in the <span class="a">C5 band</span>, Bob in the <span class="b">C2 band</span>${exchangeTogether ? ' — <span class="s">transmitted together, at the same time</span>: each public key is computed from its own private key alone, so nothing has to wait for the other side' : ', one after another with a 4-step pause between turns'}. These keys are sized to be attacked for <span class="s">24h</span>, not to protect secrets for decades — that is why they can be this small.`;
+
+    $('notes').innerHTML = '';
+    frames.forEach(f => {
+      const col = document.createElement('div'); col.className = 'frame';
+      const addBar = item => {
+        const el = document.createElement('div');
+        el.className = 'note ' + (item.sync ? 'sync' : item.side === 'A' ? 'sendA' : 'sendB');
+        el.title = `${item.label} -> ${item.note}`;
+        el.style.height = item.sync ? (item.side === 'A' ? '38px' : '26px') : (10 + idxForByte(item.byte) / 14 * 22 + (item.side === 'A' ? 8 : 0)) + 'px';
+        el.onclick = () => preview(item);
+        col.appendChild(el);
+      };
+      if (f.rest) {
+        const el = document.createElement('div');
+        el.className = 'note rest'; el.title = f.label; el.style.height = '8px';
+        col.appendChild(el);
+      } else { if (f.a) addBar(f.a); if (f.b) addBar(f.b); }
+      if (f.kick && kickOn) {
+        const k = document.createElement('div');
+        k.className = 'note kick'; k.title = 'bass kick (synth c1 + Roland TR-909) — 1/4 off, exchange only';
+        k.style.height = '5px'; col.appendChild(k);
+      }
+      if (f.clap && clapOn) {
+        const c = document.createElement('div');
+        c.className = 'note clap'; c.title = 'clap (Roland TR-909) — 2/4 off, once both sides are pulsing';
+        c.style.height = '5px'; col.appendChild(c);
+      }
+      if (f.clap2 && clapOn) {
+        const c = document.createElement('div');
+        c.className = 'note clap2'; c.title = 'second clap — every 4th clap gets one, one step later';
+        c.style.height = '5px'; col.appendChild(c);
+      }
+      $('notes').appendChild(col);
+    });
+    $('stepsList').innerHTML = '';
+    PHASE_STEPS().forEach(([ph, text], i) => {
+      const r = document.createElement('div'); r.className = 'step-row'; r.dataset.phase = ph;
+      r.innerHTML = `<span class="n">${String(i + 1).padStart(2, '0')}</span><span>${text}</span>`;
+      $('stepsList').appendChild(r);
+    });
+    codeEditor.value = strudelCode();
+    const rt = $('repToggle');
+    rt.textContent = repeatsOn ? 'ON' : 'OFF'; rt.classList.toggle('active', repeatsOn);
+    $('repNote').textContent = `${frames.length} steps total`;
+    const mt = $('modeToggle');
+    mt.textContent = exchangeTogether ? 'TOGETHER' : 'SEQUENTIAL'; mt.classList.toggle('active', exchangeTogether);
+    const kt = $('kickToggle'); kt.textContent = kickOn ? 'ON' : 'OFF'; kt.classList.toggle('active', kickOn);
+    const ct = $('clapToggle'); ct.textContent = clapOn ? 'ON' : 'OFF'; ct.classList.toggle('active', clapOn);
+    document.querySelectorAll('.p-btn').forEach(x => x.classList.toggle('active', x.textContent === curve));
+    document.querySelectorAll('.preset').forEach(x => x.classList.toggle('active', +x.textContent === bpm));
+  }
+
+  // ---------- Strudel playback ----------
+  let ready = false, playing = false, timers = [], strudelRepl = null;
+  const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+  const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+
+  async function ensureStrudel() {
+    if (ready) return;
+    playBtn.textContent = '... LOADING STRUDEL'; playBtn.classList.add('loading');
+    strudelRepl = await initStrudel();
+    try {   // one real drum-machine kick (Roland TR-909) from tidal-drum-machines; synth kick remains if this fails
+      await samples({ RolandTR909_bd: 'machines/RolandTR909/rolandtr909-bd/Bassdrum-01.wav', RolandTR909_cp: 'machines/RolandTR909/rolandtr909-cp/Clap.wav' }, 'https://raw.githubusercontent.com/geikha/tidal-drum-machines/main/');
+    } catch (e) { console.warn('TR-909 kick sample failed to load — synth kick only', e); }
+    ready = true; playBtn.classList.remove('loading');
+  }
+  async function preview(item) {
+    if (playing || !keysReady) return;
+    await ensureStrudel();
+    evaluate(`$: note("${item.chord || item.note}").s("triangle").gain(0.4).decay(0.25).sustain(0)`);
+    flash(item.frame);
+    later(() => { if (!playing) evaluate('hush()'); }, 400);
+  }
+  function markStep(phase, mode) {
+    const order = PHASE_STEPS().map(x => x[0]);
+    document.querySelectorAll('.step-row').forEach(r => {
+      if (mode) r.classList.toggle(mode, r.dataset.phase === phase);
+      r.classList.toggle('done', order.indexOf(r.dataset.phase) < order.indexOf(phase));
+    });
+  }
+  function flash(i) {
+    document.querySelectorAll('.frame').forEach((el, j) => {
+      el.querySelectorAll('.note').forEach(n => n.classList.toggle('on', j === i));
+    });
+    const f = frames[i];
+    if (!f) { $('nowNote').textContent = ''; $('aliceCard').classList.remove('live'); $('bobCard').classList.remove('live'); return; }
+    const phase = framePhase(f);
+    $('nowNote').textContent = (f.rest && !f.kick ? `~ ${f.label}` : [f.a, f.b].filter(Boolean).map(x => `♪ ${x.note} · ${x.label}`).join('   ')) + (f.kick && kickOn ? '  ·  ♪ bass kick — 1/4 off the pulse' : '') + (f.clap && clapOn ? '  ·  ♪ clap — 2/4 off' : '') + (f.clap2 && clapOn ? '  ·  ♪ 2nd clap (every 4th)' : '');
+    $('aliceCard').classList.toggle('live', !!f.a);
+    $('bobCard').classList.toggle('live', !!f.b);
+    markStep(phase, 'live');
+    const stepMs = 60000 / bpm, pk = $('packet'), pk2 = $('packet2');
+    const cross = (el, fromLeft) => {
+      el.style.transition = 'none'; el.style.left = fromLeft ? '0%' : 'calc(100% - 7px)'; el.style.opacity = 1;
+      requestAnimationFrame(() => { el.style.transition = `left ${stepMs * 0.9}ms linear`; el.style.left = fromLeft ? 'calc(100% - 7px)' : '0%'; });
+    };
+    if (phase === 'sync') {
+      if (f.a && f.b) { cross(pk, true); cross(pk2, false); $('wireLabel').textContent = f.catch ? `sync — CAUGHT ✓ shared 3/3 · locked` : `sync — shared ${f.sharedNo}/3`; }
+      else if (f.a || f.b) { cross(f.a ? pk : pk2, !!f.a); (f.a ? pk2 : pk).style.opacity = 0; $('wireLabel').textContent = `sync — ${f.a ? 'Alice' : 'Bob'} pulsing alone, other not started`; }
+      else { pk.style.opacity = 0; pk2.style.opacity = 0; $('wireLabel').textContent = 'sync · · ·'; }
+    }
+    else if (phase === 'together') {
+      cross(pk, true); cross(pk2, false);
+      const n = frames.slice(0, i + 1).filter(x => framePhase(x) === 'together').length;
+      $('wireLabel').textContent = `crossing ⇄ ${n}/${sungNotes(alicePub.length)}`;
+    }
+    else if (phase === 'sendA' || phase === 'sendB') {
+      pk2.style.opacity = 0; cross(pk, phase === 'sendA');
+      const n = frames.slice(0, i + 1).filter(x => framePhase(x) === phase).length;
+      $('wireLabel').textContent = phase === 'sendA' ? `Alice → Bob ${n}/${sungNotes(alicePub.length)}` : `Bob → Alice ${n}/${sungNotes(bobPub.length)}`;
+    }
+    if (phase === 'pause') {
+      pk.style.opacity = 0; pk2.style.opacity = 0; $('wireLabel').textContent = '· · · ·';
+      $('bRecv').textContent = shortHex(alicePub);       // Alice's key has now arrived
+    }
+  }
+  function revealShared() {
+    markStep('derive', 'live');
+    $('aliceCard').classList.add('live'); $('bobCard').classList.add('live');
+    $('aRecv').textContent = shortHex(bobPub);
+    $('aShared').textContent = sharedHex.slice(0, 16) + '…';
+    $('bShared').textContent = sharedHex.slice(0, 16) + '…';
+    const d = $('secretDisplay');
+    d.innerHTML = `${sharedHex.slice(0, 24)}…<span class="lbl">SHARED SECRET — IDENTICAL ON BOTH SIDES · DERIVED, NEVER TRANSMITTED, NEVER PLAYED</span>`;
+    d.classList.add('matched');
+    $('eveLine').textContent = `She has both public keys in full — and 24h to solve a ~2^${CURVES[curve].security} discrete log. Nowhere near enough.`;
+  }
+  function resetCycle() { try { strudelRepl?.scheduler?.setCycle(0); } catch (e) { /* older scheduler: ignore */ } }
+  function stop() {
+    clearTimers(); if (ready) { evaluate('hush()'); resetCycle(); }
+    playing = false; playBtn.textContent = '▶ PLAY TRANSMISSION'; playBtn.classList.remove('playing');
+    flash(-1); $('packet').style.opacity = 0; $('packet2').style.opacity = 0; $('wireLabel').textContent = 'idle';
+  }
+
+  playBtn.onclick = async () => {
+    if (playing) return stop();
+    if (!keysReady) return;
+    await ensureStrudel();
+    clearTimers();
+    $('aRecv').innerHTML = '<span class="dim">–</span>'; $('bRecv').innerHTML = '<span class="dim">–</span>';
+    $('aShared').textContent = '?'; $('bShared').textContent = '?';
+    const d = $('secretDisplay');
+    d.innerHTML = '…<span class="lbl">SHARED SECRET — DERIVED LOCALLY, NEVER TRANSMITTED, NEVER PLAYED</span>'; d.classList.remove('matched');
+    document.querySelectorAll('.step-row').forEach(r => r.classList.remove('live', 'done'));
+    // Strudel's scheduler free-runs between evaluates: without this, a replay starts
+    // mid-sequence (audio phase != bar 0) while the visuals restart from frame 0.
+    resetCycle();
+    evaluate(codeEditor.value);              // editor as-is, like slowhand — edits play too
+    playing = true; playBtn.textContent = '■ STOP'; playBtn.classList.add('playing');
+    const stepMs = 60000 / bpm;
+    frames.forEach((f, i) => later(() => flash(i), i * stepMs + 120));
+    later(() => { stop(); revealShared(); }, frames.length * stepMs + 500);
+  };
+
+  // ---------- controls ----------
+  Object.keys(CURVES).forEach(name => {
+    const b = document.createElement('button'); b.className = 'p-btn'; b.textContent = name;
+    b.onclick = async () => { if (playing) stop(); curve = name; await genKeys(); };
+    $('curvePresets').appendChild(b);
+  });
+  [90, 120, 160, 240, 320, 480, 960, 1920, 3840, 7680].forEach(v => {
+    const b = document.createElement('button'); b.className = 'preset'; b.textContent = v;
+    b.onclick = () => { bpm = v; if (keysReady) codeEditor.value = strudelCode(); document.querySelectorAll('.preset').forEach(x => x.classList.toggle('active', +x.textContent === bpm)); if (playing) { stop(); playBtn.click(); } };
+    $('presets').appendChild(b);
+  });
+  $('repToggle').onclick = () => {
+    if (!keysReady) return;
+    if (playing) stop();
+    repeatsOn = !repeatsOn;
+    buildMelody();
+    render(aPrivBytes, bPrivBytes);
+  };
+  $('modeToggle').onclick = () => {
+    if (!keysReady) return;
+    if (playing) stop();
+    exchangeTogether = !exchangeTogether;
+    buildMelody();
+    render(aPrivBytes, bPrivBytes);
+  };
+  $('kickToggle').onclick = () => { if (!keysReady) return; if (playing) stop(); kickOn = !kickOn; render(aPrivBytes, bPrivBytes); };
+  $('clapToggle').onclick = () => { if (!keysReady) return; if (playing) stop(); clapOn = !clapOn; render(aPrivBytes, bPrivBytes); };
+  $('newBtn').onclick = () => genKeys().catch(showErr);
+  $('openBtn').onclick = () => window.open('https://strudel.cc/#' + btoa(unescape(encodeURIComponent(codeEditor.value))), '_blank');
+  $('copyBtn').onclick = () => navigator.clipboard.writeText(codeEditor.value).then(() => {
+    const b = $('copyBtn'); b.textContent = 'OK'; b.classList.add('ok');
+    setTimeout(() => { b.textContent = 'COPY'; b.classList.remove('ok'); }, 1400);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.target === codeEditor) return;
+    if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); playBtn.click(); }
+    if (e.key === 'n' || e.key === 'N') $('newBtn').click();
+  });
+
+  function showErr(err) {
+    $('statusLine').innerHTML = `<span style="color:#e87272">Key generation failed: ${err.message}</span>`;
+    playBtn.textContent = '▶ PLAY TRANSMISSION';
+  }
+  genKeys().catch(showErr);
+</script>
+</body>
+</html>

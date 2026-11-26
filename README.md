@@ -23,7 +23,7 @@ On first play, samples load from the network — there may be a brief delay.
 ./serve.sh
 ```
 
-Starts a local HTTP server on port 8080 and opens the browser.
+Starts a local HTTP server on port 3000 and opens the browser.
 
 ## Deploy
 

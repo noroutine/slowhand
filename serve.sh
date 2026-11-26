@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-PORT=8080
+PORT=3000
 URL="http://localhost:$PORT"
 
 echo "Serving at $URL — Ctrl+C to stop"
